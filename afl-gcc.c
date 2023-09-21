@@ -59,7 +59,17 @@ static u8   be_quiet,               /* Quiet mode                        */
 
 
 /* Try to find our "fake" GNU assembler in AFL_PATH or at the location derived
-   from argv[0]. If that fails, abort. */
+   from argv[0]. If that fails, abort.
+   这个函数的功能是获取使用的汇编器。首先获取环境变量AFL_PATH
+   如果这个环境变量存在的话，接着把他和/as拼接，并判断次路径下的as文件是否存在。
+   如果存在，就使得as_path = afl_path = getenv("AFL_PATH")。
+   如果不存在就通过第二种方式尝试获取其路径。
+        首先判断是否存在/，并把最后一个/之后的路径清空，之后为其前面的路径分配空间，并与/afl-as拼接后判断这个文件是否存在，
+        如果不存在，则使得as_path = dir = ck_strdup(argv0)。
+        如果这两种方式都不能找到相应路径，即会爆出异常。
+
+
+   */
 
 static void find_as(u8* argv0) {
 
@@ -70,6 +80,7 @@ static void find_as(u8* argv0) {
 
     tmp = alloc_printf("%s/as", afl_path);
 
+    // 如果返回0，意味着文件是可执行的
     if (!access(tmp, X_OK)) {
       as_path = afl_path;
       ck_free(tmp);
@@ -109,11 +120,12 @@ static void find_as(u8* argv0) {
   }
 
   FATAL("Unable to find AFL wrapper binary for 'as'. Please set AFL_PATH");
- 
 }
 
 
-/* Copy argv to cc_params, making the necessary edits. */
+/* Copy argv to cc_params, making the necessary edits.
+ * 这个函数的主要功能是对编译所用到的参数进行编辑
+ * */
 
 static void edit_params(u32 argc, char** argv) {
 
