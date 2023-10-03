@@ -35,6 +35,34 @@ co-exists with the original code.
 
 The idea and much of the implementation comes from Laszlo Szekeres.
 
+此目录中的代码允许您使用以下命令来检测 AFL 程序
+真正的编译器级检测，而不是更粗糙的
+afl-gcc 和 afl-clang 采用的汇编级重写方法。 这有
+几个有趣的属性：
+
+   - 编译器可以进行许多在以下情况下难以实现的优化：
+     手动插入组件。 因此，一些缓慢的、受 CPU 限制的程序将
+     运行速度提高约 2 倍。
+
+     对于速度有限的快速二进制文件来说，收益不太明显
+     主要是由于创建新流程的成本。 在这种情况下，增益将
+     可能会保持在10%以内。
+
+   - 仪器独立于CPU。 至少原则上，你应该
+     能够依靠它来模糊非 x86 架构上的程序（之后
+     使用 AFL_NO_X86=1 构建 afl-fuzz）。
+
+   - 仪器可以更好地处理多线程目标。
+
+   - 由于该功能依赖于 LLVM 的内部结构，因此它是特定于 clang 的
+     并且*不*与 GCC 一起工作。
+
+一旦该实现被证明足够稳健和可移植，它
+可能会取代 afl-clang。 目前，它可以单独构建，
+与原始代码共存。
+
+这个想法和大部分实现来自 Laszlo Szekeres。
+
 2) How to use
 -------------
 
@@ -42,10 +70,19 @@ In order to leverage this mechanism, you need to have clang installed on your
 system. You should also make sure that the llvm-config tool is in your path
 (or pointed to via LLVM_CONFIG in the environment).
 
+为了利用此机制，您需要在您的计算机上安装 clang
+系统。 您还应该确保 llvm-config 工具位于您的路径中
+（或通过环境中的 LLVM_CONFIG 指向）。
+
 Unfortunately, some systems that do have clang come without llvm-config or the
 LLVM development headers; one example of this is FreeBSD. FreeBSD users will
 also run into problems with clang being built statically and not being able to
 load modules (you'll see "Service unavailable" when loading afl-llvm-pass.so).
+
+不幸的是，一些有 clang 的系统没有 llvm-config 或
+LLVM 开发头文件； FreeBSD 就是一个例子。 FreeBSD 用户将
+还遇到了静态构建 clang 且无法
+加载模块（加载 afl-llvm-pass.so 时您将看到“服务不可用”）。
 
 To solve all your problems, you can grab pre-built binaries for your OS from:
 
@@ -54,6 +91,10 @@ To solve all your problems, you can grab pre-built binaries for your OS from:
 ...and then put the bin/ directory from the tarball at the beginning of your
 $PATH when compiling the feature and building packages later on. You don't need
 to be root for that.
+
+为了解决您的所有问题，您可以从以下位置获取适用于您的操作系统的预构建二进制文件：
+http://llvm.org/releases/download.html
+然后在稍后编译功能和构建包时将 tarball 中的 bin/ 目录放在 $PATH 的开头。 你不需要成为 root。
 
 To build the instrumentation itself, type 'make'. This will generate binaries
 called afl-clang-fast and afl-clang-fast++ in the parent directory. Once this
@@ -72,6 +113,25 @@ AFL_HARDEN, and AFL_DONT_OPTIMIZE.
 Note: if you want the LLVM helper to be installed on your system for all
 users, you need to build it before issuing 'make install' in the parent
 directory.
+
+要构建仪器本身，请输入“make”。 这将生成二进制文件
+在父目录中称为 afl-clang-fast 和 afl-clang-fast++。 一旦这个
+完成后，您可以以类似于标准的方式检测第三方代码
+AFL 的运行模式，例如：
+
+   CC=/path/to/afl/afl-clang-fast ./configure [...选项...]
+   制作
+
+对于 C++ 代码，请务必将 CXX 设置为 afl-clang-fast++。
+
+该工具遵循与 afl-gcc 大致相同的环境变量（请参阅
+../docs/env_variables.txt）。 这包括 AFL_INST_RATIO、AFL_USE_ASAN、
+AFL_HARDEN 和 AFL_DONT_OPTIMIZE。
+
+注意：如果您希望 LLVM 帮助程序安装在您的系统上
+用户，您需要在父级中发出“make install”之前构建它
+目录。
+
 
 3) Gotchas, feedback, bugs
 --------------------------
@@ -97,6 +157,21 @@ to read the fuzzed input and parse it; in some cases, this can offer a 10x+
 performance gain. You can implement delayed initialization in LLVM mode in a
 fairly simple way.
 
+AFL 尝试通过仅执行一次目标二进制文件来优化性能，
+在 main() 之前停止它，然后克隆这个“主”进程以获得
+模糊测试目标的稳定供应。
+
+尽管这种方法消除了大部分操作系统、链接器和 libc 级别的内容
+执行程序的成本，它并不总是对二进制文件有帮助
+执行其他耗时的初始化步骤 - 例如，解析大型配置
+在获取模糊数据之前先创建文件。
+
+在这种情况下，稍后初始化 forkserver 是有益的，一旦
+大部分初始化工作已经完成，但在二进制尝试之前
+读取模糊输入并解析它； 在某些情况下，这可以提供 10 倍以上
+性能增益。 您可以在 LLVM 模式下实现延迟初始化
+相当简单的方法。
+
 First, find a suitable location in the code where the delayed cloning can
 take place. This needs to be done with *extreme* care to avoid breaking the
 binary. In particular, the program will probably malfunction if you select
@@ -114,6 +189,23 @@ a location after:
   - Any access to the fuzzed input, including reading the metadata about its
     size.
 
+首先，在代码中找到一个合适的位置来延迟克隆
+发生。 这需要*极其*小心地完成，以避免破坏
+二进制。 特别是，如果您选择，程序可能会出现故障
+之后的位置：
+
+   - 创建任何重要的线程或子进程 - 自 forkserver
+     无法轻易克隆它们。
+
+   - 通过 setitimer() 或等效调用初始化计时器。
+
+   - 创建临时文件、网络套接字、偏移敏感文件
+     描述符和类似的共享状态资源 - 但前提是
+     它们的状态会对程序随后的行为产生有意义的影响。
+
+   - 对模糊输入的任何访问，包括读取有关其的元数据
+     尺寸。
+
 With the location selected, add this code in the appropriate spot:
 
 #ifdef __AFL_HAVE_MANUAL_CONTROL
@@ -126,6 +218,18 @@ will keep working normally when compiled with a tool other than afl-clang-fast.
 Finally, recompile the program with afl-clang-fast (afl-gcc or afl-clang will
 *not* generate a deferred-initialization binary) - and you should be all set!
 
+选择位置后，在适当的位置添加此代码：
+
+#ifdef __AFL_HAVE_MANUAL_CONTROL
+   __AFL_INIT();
+#endif
+
+您不需要 #ifdef 防护，但包含它们可确保程序
+使用 afl-clang-fast 以外的工具编译时将保持正常工作。
+
+最后，使用 afl-clang-fast 重新编译程序（afl-gcc 或 afl-clang 将
+*不*生成延迟初始化二进制文件） - 您应该已准备就绪！
+
 5) Bonus feature #2: persistent mode
 ------------------------------------
 
@@ -135,6 +239,9 @@ single long-lived process can be reused to try out multiple test cases,
 eliminating the need for repeated fork() calls and the associated OS overhead.
 
 The basic structure of the program that does this would be:
+
+一些库提供无状态的 API，或者可以在处理不同输入文件之间重置其状态。 当执行这样的重置时，可以重用单个长期进程来尝试多个测试用例，从而消除了重复 fork() 调用的需要以及相关的操作系统开销。
+执行此操作的程序的基本结构是：
 
   while (__AFL_LOOP(1000)) {
 
@@ -166,6 +273,27 @@ PS. Because there are task switches still involved, the mode isn't as fast as
 faster than the normal fork() model, and compared to in-process fuzzing,
 should be a lot more robust.
 
+
+循环内指定的数值控制最大数量
+AFL 之前的迭代次数将从头开始重新启动该过程。 这最大限度地减少了
+内存泄漏和类似故障的影响； 1000是一个很好的起点
+走得更高会增加打嗝的可能性，但不会给你带来
+任何真正的性能优势。
+
+../experimental/persistent_demo/ 中显示了更详细的模板。
+与之前的模式类似，该功能仅适用于 afl-clang-fast；
+使用其他编译器时，可以使用 #ifdef 保护来抑制它。
+
+请注意，与之前的模式一样，该功能很容易被误用； 如果你
+不要完全重置关键状态，您可能会出现误报或
+浪费了大量的CPU 资源，根本没有做任何有用的事情。 要特别
+警惕内存泄漏和文件描述符的状态。
+
+附言。 由于仍然涉及任务切换，因此该模式的速度不如
+例如，由 LLVM 的 LibFuzzer 提供的“纯”进程内模糊测试； 但这是很多
+比普通的 fork() 模型更快，并且与进程内模糊测试相比，
+应该更加强大。
+
 6) Bonus feature #3: new 'trace-pc-guard' mode
 ----------------------------------------------
 
@@ -186,3 +314,18 @@ instrumentation is not inlined, and instead involves a function call. On systems
 that support it, compiling your target with -flto should help.
 
 
+LLVM 的最新版本附带了内置的执行跟踪功能
+为 AFL 提供必要的追踪数据，而无需
+对程序集进行后处理或安装任何编译器插件。 看：
+
+   http://clang.llvm.org/docs/SanitizerCoverage.html#tracing-pcs-with-guards
+
+如果您有一个足够新的编译器并想尝试一下，请构建
+afl-clang-fast 这样：
+
+   AFL_TRACE_PC=1 make clean all
+
+请注意，此模式目前比“vanilla”afl-clang-fast 慢约 20%，
+比 afl-clang 慢约 5-10%。 这很可能是因为
+检测不是内联的，而是涉及函数调用。 在系统上
+支持它，用 -flto 编译你的目标应该会有所帮助。
