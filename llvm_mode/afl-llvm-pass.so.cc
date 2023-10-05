@@ -113,7 +113,7 @@ bool AFLCoverage::runOnModule(Module &M) {
 
 
     // 定义链表节点结构
-    StructType *nodeType = StructType::create(M->getContext(), "ListNode");
+    StructType *nodeType = StructType::create(M.getContext(), "ListNode");
     PointerType *nodePtrType = PointerType::get(nodeType, 0);
     nodeType->setBody({Int32Ty, nodePtrType});
 
