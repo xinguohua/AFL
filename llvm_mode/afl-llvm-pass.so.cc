@@ -112,17 +112,10 @@ bool AFLCoverage::runOnModule(Module &M) {
       0, GlobalVariable::GeneralDynamicTLSModel, 0, false);
 
 
-    // 定义链表节点结构
-    StructType *nodeType = StructType::create(M.getContext(), "ListNode");
-    PointerType *nodePtrType = PointerType::get(nodeType, 0);
-    nodeType->setBody({Int32Ty, nodePtrType});
-
-    GlobalVariable *head = new GlobalVariable(
-            M, nodePtrType, false, GlobalValue::ExternalLinkage,
-            ConstantPointerNull::get(nodePtrType), "list_head");
-    GlobalVariable *tail = new GlobalVariable(
-            M, nodePtrType, false, GlobalValue::ExternalLinkage,
-            ConstantPointerNull::get(nodePtrType), "list_tail");
+    PointerType *stringType = PointerType::get(IntegerType::get(M.getContext(), 8), 0); // i8* 表示字符串
+    GlobalVariable *pathString = new GlobalVariable(
+            M, stringType, false, GlobalValue::ExternalLinkage,
+            Constant::getNullValue(stringType), "path_string");
 
   /* Instrument all the things! */
 
