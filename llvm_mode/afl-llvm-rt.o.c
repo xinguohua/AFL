@@ -60,7 +60,11 @@
 u8  __afl_area_initial[MAP_SIZE];
 u8* __afl_area_ptr = __afl_area_initial;
 
+u8  __path_string_initial[MAP_SIZE];
+u8* __path_string_ptr = __path_string_initial;
+
 __thread u32 __afl_prev_loc;
+__thread u32 __path_string_len;
 
 
 /* Running in persistent mode? */
