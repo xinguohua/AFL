@@ -75,29 +75,43 @@ static u8 is_persistent;
 /* SHM setup. */
 
 static void __afl_map_shm(void) {
+    u8 *id_str = getenv(SHM_ENV_VAR);
+    u8 *path_id_str = getenv(PATH_SHM_ENV_VAR);
 
-  u8 *id_str = getenv(SHM_ENV_VAR);
 
-  /* If we're running under AFL, attach to the appropriate region, replacing the
-     early-stage __afl_area_initial region that is needed to allow some really
-     hacky .init code to work correctly in projects such as OpenSSL. */
+    /* If we're running under AFL, attach to the appropriate region, replacing the
+       early-stage __afl_area_initial region that is needed to allow some really
+       hacky .init code to work correctly in projects such as OpenSSL. */
 
-  if (id_str) {
+    if (path_id_str) {
+        u32 path_id = atoi(path_id_str);
 
-    u32 shm_id = atoi(id_str);
+        __path_string_ptr = shmat(path_id, NULL, 0);
 
-    __afl_area_ptr = shmat(shm_id, NULL, 0);
+        /* Whooooops. */
+        if (__path_string_ptr == (void *) -1) _exit(1);
 
-    /* Whooooops. */
+        /* Write something into the bitmap so that even with low AFL_INST_RATIO,
+           our parent doesn't give up on us. */
 
-    if (__afl_area_ptr == (void *)-1) _exit(1);
+        __path_string_ptr[0] = 1;
+    }
+    if (id_str) {
+        u32 shm_id = atoi(id_str);
 
-    /* Write something into the bitmap so that even with low AFL_INST_RATIO,
-       our parent doesn't give up on us. */
+        __afl_area_ptr = shmat(shm_id, NULL, 0);
 
-    __afl_area_ptr[0] = 1;
+        /* Whooooops. */
 
-  }
+        if (__afl_area_ptr == (void *) -1) _exit(1);
+
+        /* Write something into the bitmap so that even with low AFL_INST_RATIO,
+           our parent doesn't give up on us. */
+
+        __afl_area_ptr[0] = 1;
+
+    }
+
 
 }
 
@@ -148,7 +162,7 @@ static void __afl_start_forkserver(void) {
         close(FORKSRV_FD);
         close(FORKSRV_FD + 1);
         return;
-  
+
       }
 
     } else {
@@ -202,6 +216,10 @@ int __afl_persistent_loop(unsigned int max_cnt) {
       memset(__afl_area_ptr, 0, MAP_SIZE);
       __afl_area_ptr[0] = 1;
       __afl_prev_loc = 0;
+
+      memset(__path_string_ptr, 0, MAP_SIZE);
+      __path_string_ptr[0] = 1;
+      __path_string_len = 0;
     }
 
     cycle_cnt  = max_cnt;
@@ -219,6 +237,9 @@ int __afl_persistent_loop(unsigned int max_cnt) {
       __afl_area_ptr[0] = 1;
       __afl_prev_loc = 0;
 
+      __path_string_ptr[0] = 1;
+      __path_string_len = 0;
+
       return 1;
 
     } else {
@@ -228,6 +249,7 @@ int __afl_persistent_loop(unsigned int max_cnt) {
          dummy output region. */
 
       __afl_area_ptr = __afl_area_initial;
+      __path_string_ptr = __path_string_initial;
 
     }
 
@@ -242,7 +264,7 @@ int __afl_persistent_loop(unsigned int max_cnt) {
     is enabled. */
 
 void __afl_manual_init(void) {
-
+  printf("__afl_manual_init =========");
   static u8 init_done;
 
   if (!init_done) {
@@ -252,7 +274,6 @@ void __afl_manual_init(void) {
     init_done = 1;
 
   }
-
 }
 
 
@@ -315,4 +336,10 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t* start, uint32_t* stop) {
 
   }
 
+}
+
+
+
+void log_br(long long int pathString){
+    fprintf(stderr, "###$$$ pathString: %lld\n", pathString);
 }

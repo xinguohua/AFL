@@ -140,7 +140,6 @@ bool AFLCoverage::runOnModule(Module &M) {
             &M  // Attach the function to your module
     );
 
-
     std::vector < llvm::Type * > argTypes = {
             Type::getInt8PtrTy(M.getContext()),  // char* buffer
             Type::getInt8PtrTy(M.getContext())   // const char* format, 这里只声明了两个参数，实际上 sprintf 可以有更多
@@ -154,7 +153,7 @@ bool AFLCoverage::runOnModule(Module &M) {
 
     Function *sprintfFunc = Function::Create(
             sprintfType,
-            Function::ExternalLinkage,
+            Function::InternalLinkage,
             "sprintf",
             &M   // 这是你的模块对象
     );
@@ -169,7 +168,7 @@ bool AFLCoverage::runOnModule(Module &M) {
     // Declare the strlen function in your module
     Function *strlenFunc = Function::Create(
             strlenFuncType,
-            Function::ExternalLinkage,
+            Function::InternalLinkage,
             "strlen",
             &M  // Attach the function to your module
     );
@@ -181,11 +180,18 @@ bool AFLCoverage::runOnModule(Module &M) {
     );
     Function *freeFunc = Function::Create(
             freeFuncType,
-            Function::ExternalLinkage,
+            Function::InternalLinkage,
             "free",
             &M  // Attach the function to your module
     );
 
+
+
+    IntegerType *Int64Ty  = IntegerType::getInt64Ty(C);
+    Type *retType = Type::getVoidTy(C);
+    std::vector<Type*> paramTypes_5 = {Type::getInt64Ty(C)};
+    FunctionType *logFuncType_5 = FunctionType::get(retType, paramTypes_5, false);
+    FunctionCallee log_br = (&M)->getOrInsertFunction("log_br", logFuncType_5);
 
     /* Instrument all the things! */
 
@@ -236,39 +242,51 @@ bool AFLCoverage::runOnModule(Module &M) {
             inst_blocks++;
 
             /*Set Path*/
-            // init curLoc curLen
-            AllocaInst *curLocBuffer = IRB.CreateAlloca(IntegerType::get(M.getContext(), 8),
-                                                        ConstantInt::get(Int32Ty, 10));
-            IRB.CreateCall(sprintfFunc, {curLocBuffer, IRB.CreateGlobalStringPtr("-%d"), CurLoc});
-            Value *src = IRB.CreateBitCast(curLocBuffer, Type::getInt8PtrTy(M.getContext()));
-            Value *srcLen = IRB.CreateCall(strlenFunc, {src});
+//            // init curLoc curLen
+//            AllocaInst *curLocBuffer = IRB.CreateAlloca(IntegerType::get(M.getContext(), 8),
+//                                                        ConstantInt::get(Int32Ty, 10));
+//            IRB.CreateCall(sprintfFunc, {curLocBuffer, IRB.CreateGlobalStringPtr("-%d"), CurLoc});
+//            Value *src = IRB.CreateBitCast(curLocBuffer, Type::getInt8PtrTy(M.getContext()));
+//            Value *srcLen = IRB.CreateCall(strlenFunc, {src});
+//
+//            // init Last pathLoc  pathLen
+//            LoadInst *pathStringPtr = IRB.CreateLoad(pathString);
+//            LoadInst *pathStringLenLoc = IRB.CreateLoad(pathStringLen);
+//            Value *len = IRB.CreateZExt(pathStringLenLoc, IRB.getInt32Ty());
+//
+//           // get total len
+//            Value *newLen = IRB.CreateAdd(len, srcLen);
+//
+//            // copy
+//            Value *newMem = IRB.CreateCall(mallocFunc, {newLen});
+//            IRB.CreateMemCpy(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), Align(1), pathStringPtr, Align(1),len);
+//
+//            //concat
+//            IRB.CreateMemCpy(IRB.CreateGEP(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), len),
+//                             Align(1), src, Align(1), srcLen);
+//
+//            // free before
+//            Value *isNull = IRB.CreateIsNull(pathString);
+//            if (!isNull) {
+//                IRB.CreateCall(freeFunc, {pathString});
+//            }
+//            // pathString update
+//            Value *newMemAsPtr = IRB.CreateBitCast(newMem, pathString->getType());
+//            IRB.CreateStore(newMemAsPtr, pathString);
+//            // pathLen update
+//            IRB.CreateStore(newLen, pathStringLen);
+// test
+            //IRB.CreateStore(ConstantInt::get(Int8Ty, 1), pathString);
+            Value *MapPtrIdx1 =IRB.CreateGEP(MapPtr, ConstantInt::get(Int8Ty, 1));
+            Value * val = IRB.CreateAdd(ConstantInt::get(Int8Ty, 2), ConstantInt::get(Int8Ty, 1));
+            IRB.CreateStore(val, MapPtrIdx1);
 
-            // init Last pathLoc  pathLen
-            LoadInst *pathStringPtr = IRB.CreateLoad(pathString);
-            LoadInst *pathStringLenLoc = IRB.CreateLoad(pathStringLen);
-            Value *len = IRB.CreateZExt(pathStringLenLoc, IRB.getInt32Ty());
-
-           // get total len
-            Value *newLen = IRB.CreateAdd(len, srcLen);
-
-            // copy
-            Value *newMem = IRB.CreateCall(mallocFunc, {newLen});
-            IRB.CreateMemCpy(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), Align(1), pathStringPtr, Align(1),len);
-
-            //concat
-            IRB.CreateMemCpy(IRB.CreateGEP(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), len),
-                             Align(1), src, Align(1), srcLen);
-
-            // free before
-            Value *isNull = IRB.CreateIsNull(pathString);
-            if (!isNull) {
-                IRB.CreateCall(freeFunc, {pathString});
-            }
-            // pathString update
-            Value *newMemAsPtr = IRB.CreateBitCast(newMem, pathString->getType());
-            IRB.CreateStore(newMemAsPtr, pathString);
-            // pathLen update
-            IRB.CreateStore(newLen, pathStringLen);
+            Value *pathStringIdx1 =IRB.CreateGEP(pathString, ConstantInt::get(Int8Ty, 1));
+            Value * val2 = IRB.CreateAdd(ConstantInt::get(Int8Ty, 2), ConstantInt::get(Int8Ty, 1));
+            IRB.CreateStore(val2, pathStringIdx1);
+            //llvm::outs()<<"====pathStringPt==="<<pathString;
+            Value * args[] = {pathString};
+            IRB.CreateCall(log_br, args);
         }
     }
 
@@ -286,7 +304,6 @@ bool AFLCoverage::runOnModule(Module &M) {
                               "ASAN/MSAN" : "non-hardened"), inst_ratio);
 
     }
-    llvm::outs() << "======xgh====return" << "\n";;
     return true;
 
 }

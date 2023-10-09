@@ -54,6 +54,7 @@
 
 static s32 child_pid;                 /* PID of the tested program         */
 
+static u8* path_bits;                 /* PATH with instrumentation bitmap  */
 static u8 *trace_bits,                /* SHM with instrumentation bitmap   */
           *mask_bitmap;               /* Mask for trace bits (-B)          */
 
@@ -75,6 +76,7 @@ static u32 in_len,                    /* Input data length                 */
 
 static u64 mem_limit = MEM_LIMIT;     /* Memory limit (MB)                 */
 
+static s32 path_id;                    /* ID of the PATH region             */
 static s32 shm_id,                    /* ID of the SHM region              */
            dev_null_fd = -1;          /* FD to /dev/null                   */
 
@@ -177,22 +179,35 @@ static void remove_shm(void) {
 static void setup_shm(void) {
 
   u8* shm_str;
+  u8* path_str;
 
   shm_id = shmget(IPC_PRIVATE, MAP_SIZE, IPC_CREAT | IPC_EXCL | 0600);
 
   if (shm_id < 0) PFATAL("shmget() failed");
 
+  path_id = shmget(IPC_PRIVATE, MAP_SIZE, IPC_CREAT | IPC_EXCL | 0600);
+
+  if (path_id < 0) PFATAL("path_id  get failed");
+
   atexit(remove_shm);
 
   shm_str = alloc_printf("%d", shm_id);
+  path_str = alloc_printf("%d", path_id);
+
 
   setenv(SHM_ENV_VAR, shm_str, 1);
 
+  setenv(PATH_SHM_ENV_VAR, path_str, 1);
+
   ck_free(shm_str);
+  ck_free(path_str);
+
 
   trace_bits = shmat(shm_id, NULL, 0);
-  
   if (trace_bits == (void *)-1) PFATAL("shmat() failed");
+
+  path_bits = shmat(path_id, NULL, 0);
+  if (path_bits == (void *)-1) PFATAL("shmat() failed");
 
 }
 
