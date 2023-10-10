@@ -79,6 +79,8 @@ bool AFLCoverage::runOnModule(Module &M) {
 
     IntegerType *Int8Ty = IntegerType::getInt8Ty(C);
     IntegerType *Int32Ty = IntegerType::getInt32Ty(C);
+    IntegerType *Int64Ty = IntegerType::getInt64Ty(C);
+
 
     /* Show a banner */
 
@@ -146,7 +148,7 @@ bool AFLCoverage::runOnModule(Module &M) {
     };
 
     FunctionType *sprintfType = FunctionType::get(
-            Type::getInt32Ty(M.getContext()),  // 返回值类型，sprintf 返回写入的字符数
+            Type::getInt64Ty(M.getContext()),  // 返回值类型，sprintf 返回写入的字符数
             argTypes,
             true   // 表示这是一个可变参数函数
     );
@@ -187,11 +189,15 @@ bool AFLCoverage::runOnModule(Module &M) {
 
 
 
-    IntegerType *Int64Ty  = IntegerType::getInt64Ty(C);
     Type *retType = Type::getVoidTy(C);
-    std::vector<Type*> paramTypes_5 = {Type::getInt64Ty(C)};
+    std::vector<Type*> paramTypes_5 = {Type::getInt64Ty(C), Type::getInt64Ty(C)};
     FunctionType *logFuncType_5 = FunctionType::get(retType, paramTypes_5, false);
     FunctionCallee log_br = (&M)->getOrInsertFunction("log_br", logFuncType_5);
+
+//    Type *retType1 = Type::getInt64Ty(C);  // assuming 64-bit platform
+//    Type *charPtrType = Type::getInt8PtrTy(C);
+//    FunctionType *funcType = FunctionType::get(retType1, charPtrType, false);
+//    FunctionCallee strlen_wrapper = (&M)->getOrInsertFunction("strlen_wrapper", funcType);
 
     /* Instrument all the things! */
 
@@ -210,7 +216,7 @@ bool AFLCoverage::runOnModule(Module &M) {
 
             unsigned int cur_loc = AFL_R(MAP_SIZE);
 
-            ConstantInt *CurLoc = ConstantInt::get(Int32Ty, cur_loc);
+            ConstantInt *CurLoc = ConstantInt::get(Int64Ty, cur_loc);
 
             /* Load prev_loc */
 
@@ -242,50 +248,52 @@ bool AFLCoverage::runOnModule(Module &M) {
             inst_blocks++;
 
             /*Set Path*/
-//            // init curLoc curLen
-//            AllocaInst *curLocBuffer = IRB.CreateAlloca(IntegerType::get(M.getContext(), 8),
-//                                                        ConstantInt::get(Int32Ty, 10));
-//            IRB.CreateCall(sprintfFunc, {curLocBuffer, IRB.CreateGlobalStringPtr("-%d"), CurLoc});
-//            Value *src = IRB.CreateBitCast(curLocBuffer, Type::getInt8PtrTy(M.getContext()));
-//            Value *srcLen = IRB.CreateCall(strlenFunc, {src});
-//
-//            // init Last pathLoc  pathLen
-//            LoadInst *pathStringPtr = IRB.CreateLoad(pathString);
-//            LoadInst *pathStringLenLoc = IRB.CreateLoad(pathStringLen);
-//            Value *len = IRB.CreateZExt(pathStringLenLoc, IRB.getInt32Ty());
-//
-//           // get total len
-//            Value *newLen = IRB.CreateAdd(len, srcLen);
-//
-//            // copy
-//            Value *newMem = IRB.CreateCall(mallocFunc, {newLen});
-//            IRB.CreateMemCpy(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), Align(1), pathStringPtr, Align(1),len);
-//
-//            //concat
-//            IRB.CreateMemCpy(IRB.CreateGEP(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), len),
-//                             Align(1), src, Align(1), srcLen);
-//
-//            // free before
-//            Value *isNull = IRB.CreateIsNull(pathString);
-//            if (!isNull) {
-//                IRB.CreateCall(freeFunc, {pathString});
-//            }
-//            // pathString update
-//            Value *newMemAsPtr = IRB.CreateBitCast(newMem, pathString->getType());
-//            IRB.CreateStore(newMemAsPtr, pathString);
-//            // pathLen update
-//            IRB.CreateStore(newLen, pathStringLen);
-// test
-            //IRB.CreateStore(ConstantInt::get(Int8Ty, 1), pathString);
-            Value *MapPtrIdx1 =IRB.CreateGEP(MapPtr, ConstantInt::get(Int8Ty, 1));
-            Value * val = IRB.CreateAdd(ConstantInt::get(Int8Ty, 2), ConstantInt::get(Int8Ty, 1));
-            IRB.CreateStore(val, MapPtrIdx1);
+            // init curLoc curLen
+            AllocaInst *curLocBuffer = IRB.CreateAlloca(IntegerType::get(M.getContext(), 8),
+                                                        ConstantInt::get(Int64Ty, 100));
+            IRB.CreateCall(sprintfFunc, {curLocBuffer, IRB.CreateGlobalStringPtr("-%d"), CurLoc});
+            Value *src = IRB.CreateBitCast(curLocBuffer, Type::getInt8PtrTy(M.getContext()));
+            Value *srcLen = IRB.CreateCall(strlenFunc, {src});
 
-            Value *pathStringIdx1 =IRB.CreateGEP(pathString, ConstantInt::get(Int8Ty, 1));
-            Value * val2 = IRB.CreateAdd(ConstantInt::get(Int8Ty, 2), ConstantInt::get(Int8Ty, 1));
-            IRB.CreateStore(val2, pathStringIdx1);
-            //llvm::outs()<<"====pathStringPt==="<<pathString;
-            Value * args[] = {pathString};
+            // init Last pathLoc  pathLen
+            LoadInst *pathStringPtr = IRB.CreateLoad(pathString);
+            LoadInst *pathStringLenLoc = IRB.CreateLoad(pathStringLen);
+            Value *len = IRB.CreateZExt(pathStringLenLoc, IRB.getInt32Ty());
+
+           // get total len
+            Value *newLen = IRB.CreateAdd(len, srcLen);
+
+            // copy
+            Value *newMem = IRB.CreateCall(mallocFunc, {newLen});
+            IRB.CreateMemCpy(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), Align(1), pathStringPtr, Align(1),len);
+
+            //concat
+            IRB.CreateMemCpy(IRB.CreateGEP(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), len),
+                             Align(1), src, Align(1), srcLen);
+
+            // pathString update
+            const DataLayout &DL = M.getDataLayout();
+            unsigned align = DL.getPrefTypeAlignment(Type::getInt8Ty(M.getContext()));
+            IRB.CreateMemCpy(pathStringPtr, llvm::MaybeAlign(align), newMem, llvm::MaybeAlign(align), newLen);
+
+
+            // free before
+            Value *isNull = IRB.CreateIsNull(newMem);
+            if (!isNull) {
+                IRB.CreateCall(freeFunc, {newMem});
+            }
+            // pathLen update
+            IRB.CreateStore(newLen, pathStringLen);
+            // test
+            Value *MapPtrIdx1 =IRB.CreateGEP(MapPtr, ConstantInt::get(Int8Ty, 1));
+            IRB.CreateStore(newLen, MapPtrIdx1);
+//
+//            LoadInst *pathStringPtr = IRB.CreateLoad(pathString);
+//            Value *pathStringIdx1 =IRB.CreateGEP(pathStringPtr, ConstantInt::get(Int8Ty, 1));
+//            Value * val2 = IRB.CreateAdd(ConstantInt::get(Int8Ty, 2), ConstantInt::get(Int8Ty, 1));
+//            IRB.CreateStore(val2, pathStringIdx1);
+//            //llvm::outs()<<"====pathStringPt==="<<pathString;
+            Value * args[] = {newLen, CurLoc};
             IRB.CreateCall(log_br, args);
         }
     }
