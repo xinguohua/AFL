@@ -127,21 +127,6 @@ bool AFLCoverage::runOnModule(Module &M) {
             0, GlobalVariable::GeneralDynamicTLSModel, 0, false);
 
 
-
-    FunctionType *mallocFuncType = FunctionType::get(
-            Type::getInt8PtrTy(M.getContext()),   // Return type: i8* represents void* in C
-            {IntegerType::get(M.getContext(), 32)}, // Parameter type: i32 represents size_t on a 32-bit platform
-            false   // Not varargs
-    );
-
-    // Declare the malloc function in your module
-    Function *mallocFunc = Function::Create(
-            mallocFuncType,
-            Function::ExternalLinkage,
-            "malloc",
-            &M  // Attach the function to your module
-    );
-
     std::vector < llvm::Type * > argTypes = {
             Type::getInt8PtrTy(M.getContext()),  // char* buffer
             Type::getInt8PtrTy(M.getContext())   // const char* format, 这里只声明了两个参数，实际上 sprintf 可以有更多
@@ -160,44 +145,16 @@ bool AFLCoverage::runOnModule(Module &M) {
             &M   // 这是你的模块对象
     );
 
-    // Declare the strlen function type: i32 (i8*)
-    FunctionType *strlenFuncType = FunctionType::get(
-            IntegerType::get(M.getContext(), 32),  // Return type
-            {Type::getInt8PtrTy(M.getContext())},  // Parameter type
-            false  // Not varargs
-    );
-
-    // Declare the strlen function in your module
-    Function *strlenFunc = Function::Create(
-            strlenFuncType,
-            Function::InternalLinkage,
-            "strlen",
-            &M  // Attach the function to your module
-    );
-
-    FunctionType *freeFuncType = FunctionType::get(
-            Type::getVoidTy(M.getContext()),   // Return type: void
-            {Type::getInt8PtrTy(M.getContext())}, // Parameter type: i8* represents void* in C
-            false   // Not varargs
-    );
-    Function *freeFunc = Function::Create(
-            freeFuncType,
-            Function::InternalLinkage,
-            "free",
-            &M  // Attach the function to your module
-    );
-
-
 
     Type *retType = Type::getVoidTy(C);
     std::vector<Type*> paramTypes_5 = {Type::getInt64Ty(C), Type::getInt64Ty(C)};
     FunctionType *logFuncType_5 = FunctionType::get(retType, paramTypes_5, false);
     FunctionCallee log_br = (&M)->getOrInsertFunction("log_br", logFuncType_5);
 
-//    Type *retType1 = Type::getInt64Ty(C);  // assuming 64-bit platform
-//    Type *charPtrType = Type::getInt8PtrTy(C);
-//    FunctionType *funcType = FunctionType::get(retType1, charPtrType, false);
-//    FunctionCallee strlen_wrapper = (&M)->getOrInsertFunction("strlen_wrapper", funcType);
+    Type *retType1 = Type::getInt32Ty(C);
+    Type *charPtrType = Type::getInt8PtrTy(C);
+    FunctionType *funcType = FunctionType::get(retType1, charPtrType, false);
+    FunctionCallee strlen_wrapper = (&M)->getOrInsertFunction("strlen_wrapper", funcType);
 
     /* Instrument all the things! */
 
@@ -253,7 +210,10 @@ bool AFLCoverage::runOnModule(Module &M) {
                                                         ConstantInt::get(Int64Ty, 10));
             IRB.CreateCall(sprintfFunc, {curLocBuffer, IRB.CreateGlobalStringPtr("-%d"), CurLoc});
             Value *src = IRB.CreateBitCast(curLocBuffer, Type::getInt8PtrTy(M.getContext()));
-            Value *srcLen = IRB.CreateCall(strlenFunc, {src});
+
+            Value * arg1[] = {src};
+            CallInst *srcLenCall = IRB.CreateCall(strlen_wrapper, arg1);
+            Value *srcLen = IRB.CreateZExt(srcLenCall, Type::getInt32Ty(C));
 
             // init Last pathLoc  pathLen
             LoadInst *pathStringPtr = IRB.CreateLoad(pathString);
@@ -263,28 +223,12 @@ bool AFLCoverage::runOnModule(Module &M) {
            // get total len
             Value *newLen = IRB.CreateAdd(len, srcLen);
 
-            // copy
-            Value *newMem = IRB.CreateCall(mallocFunc, {newLen});
-            IRB.CreateMemCpy(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), Align(1), pathStringPtr, Align(1),len);
+            Value *pathCopyPtr =IRB.CreateGEP(pathStringPtr, len);
+            IRB.CreateMemCpy(pathCopyPtr,Align(1), src, Align(1), srcLen);
 
-            //concat
-            IRB.CreateMemCpy(IRB.CreateGEP(IRB.CreateBitCast(newMem, Type::getInt8PtrTy(M.getContext())), len),
-                             Align(1), src, Align(1), srcLen);
-
-            // pathString update
-            const DataLayout &DL = M.getDataLayout();
-            unsigned align = DL.getPrefTypeAlignment(Type::getInt8Ty(M.getContext()));
-            IRB.CreateMemCpy(pathStringPtr, llvm::MaybeAlign(align), newMem, llvm::MaybeAlign(align), newLen);
-
-
-            // free before
-            Value *isNull = IRB.CreateIsNull(newMem);
-            if (!isNull) {
-                IRB.CreateCall(freeFunc, {newMem});
-            }
             // pathLen update
             IRB.CreateStore(newLen, pathStringLen);
-            // test
+            // below test
             Value *MapPtrIdx1 =IRB.CreateGEP(MapPtr, ConstantInt::get(Int8Ty, 1));
             IRB.CreateStore(newLen, MapPtrIdx1);
 //
@@ -293,7 +237,7 @@ bool AFLCoverage::runOnModule(Module &M) {
 //            Value * val2 = IRB.CreateAdd(ConstantInt::get(Int8Ty, 2), ConstantInt::get(Int8Ty, 1));
 //            IRB.CreateStore(val2, pathStringIdx1);
 //            //llvm::outs()<<"====pathStringPt==="<<pathString;
-            Value * args[] = {newLen, CurLoc, srcLen, len};
+            Value * args[] = {newLen, CurLoc, srcLen, len, src};
             IRB.CreateCall(log_br, args);
         }
     }

@@ -340,18 +340,38 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t* start, uint32_t* stop) {
 
 
 
-void log_br(long long int len, long long int loc, long long int srcLen, long long int originLen){
+void log_br(long long int len, long long int loc, long long int srcLen, long long int originLen, char* originSrc){
     char str[len + 1]; // +1 for the null terminator
     strncpy(str, (char*)__path_string_ptr, len);
     str[len] = '\0';  // ensure null termination
-    printf("current loc %d\n", loc);
-    fprintf(stderr, "###$$$ all len: %d\n", len);
-    fprintf(stderr, "###$$$ all srcLen: %d\n", srcLen);
-    fprintf(stderr, "###$$$ all originLen: %d\n", originLen);
-    printf("###$$$ final path %s\n", str);
+    printf("log_br###current loc %d\n", loc);
+    fprintf(stderr, "log_br###$$$ all len: %d\n", len);
+    fprintf(stderr, "log_br###$$$ all srcLen: %d\n", srcLen);
+    fprintf(stderr, "log_br###$$$ all originLen: %d\n", originLen);
+    printf("log_br###$$$ final path %s\n", str);
+    printf("log_br###$$$ originSrc %s\n", originSrc);
 }
 
 
-size_t strlen_wrapper(const char *str) {
-    return strlen(str);
+int strlen_wrapper(const char *str) {
+    int res = strlen(str);
+    printf("strlen_wrapper###$$$ res %d\n", res);
+    printf("strlen_wrapper###$$$ str %s\n", str);
+
+    return res;
+}
+
+
+int sprintf_wrapper(char *buffer, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    int res = vsprintf(buffer, format, args); // 使用vsprintf处理可变参数
+
+    printf("sprintf_wrapper###$$$ res %d\n", res);
+    printf("sprintf_wrapper###$$$ buffer %s\n", buffer);
+
+    va_end(args);
+
+    return res;
 }
