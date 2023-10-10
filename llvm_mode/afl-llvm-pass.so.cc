@@ -125,27 +125,7 @@ bool AFLCoverage::runOnModule(Module &M) {
     GlobalVariable *pathStringLen = new GlobalVariable(
             M, Int32Ty, false, GlobalValue::ExternalLinkage, 0, "__path_string_len",
             0, GlobalVariable::GeneralDynamicTLSModel, 0, false);
-
-
-    std::vector < llvm::Type * > argTypes = {
-            Type::getInt8PtrTy(M.getContext()),  // char* buffer
-            Type::getInt8PtrTy(M.getContext())   // const char* format, 这里只声明了两个参数，实际上 sprintf 可以有更多
-    };
-
-    FunctionType *sprintfType = FunctionType::get(
-            Type::getInt64Ty(M.getContext()),  // 返回值类型，sprintf 返回写入的字符数
-            argTypes,
-            true   // 表示这是一个可变参数函数
-    );
-
-    Function *sprintfFunc = Function::Create(
-            sprintfType,
-            Function::InternalLinkage,
-            "sprintf",
-            &M   // 这是你的模块对象
-    );
-
-
+    
     Type *retType = Type::getVoidTy(C);
     std::vector<Type*> paramTypes_5 = {Type::getInt64Ty(C), Type::getInt64Ty(C)};
     FunctionType *logFuncType_5 = FunctionType::get(retType, paramTypes_5, false);
@@ -156,20 +136,11 @@ bool AFLCoverage::runOnModule(Module &M) {
     FunctionType *funcType = FunctionType::get(retType1, charPtrType, false);
     FunctionCallee strlen_wrapper = (&M)->getOrInsertFunction("strlen_wrapper", funcType);
 
-    // Return type is int32 (i.e., i32 in LLVM)
-    Type *retType = Type::getInt32Ty(C);
-
-// First argument type is char* (i.e., i8* in LLVM)
-    Type *charPtrType = Type::getInt8PtrTy(C);
-
-// The sprintf function has at least two char* arguments before the variadic part
-    std::vector<Type*> argTypes = {charPtrType, charPtrType};
-
-// Define the function type, with 'true' indicating it's variadic
-    FunctionType *funcType = FunctionType::get(retType, argTypes, true);
-
-// Declare or get the function from the module
-    FunctionCallee sprintf_wrapper = (&M)->getOrInsertFunction("sprintf_wrapper", funcType);
+    Type *retType2 = Type::getInt64Ty(C);
+    Type *charPtrType2 = Type::getInt8PtrTy(C);
+    std::vector<Type*> argTypes2 = {charPtrType2, charPtrType2};
+    FunctionType *funcType2 = FunctionType::get(retType2, argTypes2, true);
+    FunctionCallee sprintf_wrapper = (&M)->getOrInsertFunction("sprintf_wrapper", funcType2);
 
     /* Instrument all the things! */
 
@@ -223,7 +194,10 @@ bool AFLCoverage::runOnModule(Module &M) {
             // init curLoc curLen
             AllocaInst *curLocBuffer = IRB.CreateAlloca(IntegerType::get(M.getContext(), 8),
                                                         ConstantInt::get(Int64Ty, 10));
-            IRB.CreateCall(sprintfFunc, {curLocBuffer, IRB.CreateGlobalStringPtr("-%d"), CurLoc});
+            //IRB.CreateCall(sprintfFunc, {curLocBuffer, IRB.CreateGlobalStringPtr("-%d"), CurLoc});
+            Value * arg0[] = {curLocBuffer, IRB.CreateGlobalStringPtr("-%d"), CurLoc};
+            IRB.CreateCall(sprintf_wrapper, arg0);
+
             Value *src = IRB.CreateBitCast(curLocBuffer, Type::getInt8PtrTy(M.getContext()));
 
             Value * arg1[] = {src};
