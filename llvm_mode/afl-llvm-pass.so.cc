@@ -125,7 +125,7 @@ bool AFLCoverage::runOnModule(Module &M) {
     GlobalVariable *pathStringLen = new GlobalVariable(
             M, Int32Ty, false, GlobalValue::ExternalLinkage, 0, "__path_string_len",
             0, GlobalVariable::GeneralDynamicTLSModel, 0, false);
-    
+
     Type *retType = Type::getVoidTy(C);
     std::vector<Type*> paramTypes_5 = {Type::getInt64Ty(C), Type::getInt64Ty(C)};
     FunctionType *logFuncType_5 = FunctionType::get(retType, paramTypes_5, false);
@@ -218,8 +218,8 @@ bool AFLCoverage::runOnModule(Module &M) {
             // pathLen update
             IRB.CreateStore(newLen, pathStringLen);
             // below test
-            Value *MapPtrIdx1 =IRB.CreateGEP(MapPtr, ConstantInt::get(Int8Ty, 1));
-            IRB.CreateStore(newLen, MapPtrIdx1);
+//            Value *MapPtrIdx1 =IRB.CreateGEP(MapPtr, ConstantInt::get(Int8Ty, 1));
+//            IRB.CreateStore(newLen, MapPtrIdx1);
 //
 //            LoadInst *pathStringPtr = IRB.CreateLoad(pathString);
 //            Value *pathStringIdx1 =IRB.CreateGEP(pathStringPtr, ConstantInt::get(Int8Ty, 1));
