@@ -250,7 +250,7 @@ bool AFLCoverage::runOnModule(Module &M) {
             /*Set Path*/
             // init curLoc curLen
             AllocaInst *curLocBuffer = IRB.CreateAlloca(IntegerType::get(M.getContext(), 8),
-                                                        ConstantInt::get(Int64Ty, 100));
+                                                        ConstantInt::get(Int64Ty, 10));
             IRB.CreateCall(sprintfFunc, {curLocBuffer, IRB.CreateGlobalStringPtr("-%d"), CurLoc});
             Value *src = IRB.CreateBitCast(curLocBuffer, Type::getInt8PtrTy(M.getContext()));
             Value *srcLen = IRB.CreateCall(strlenFunc, {src});
@@ -293,7 +293,7 @@ bool AFLCoverage::runOnModule(Module &M) {
 //            Value * val2 = IRB.CreateAdd(ConstantInt::get(Int8Ty, 2), ConstantInt::get(Int8Ty, 1));
 //            IRB.CreateStore(val2, pathStringIdx1);
 //            //llvm::outs()<<"====pathStringPt==="<<pathString;
-            Value * args[] = {newLen, CurLoc};
+            Value * args[] = {newLen, CurLoc, srcLen, len};
             IRB.CreateCall(log_br, args);
         }
     }

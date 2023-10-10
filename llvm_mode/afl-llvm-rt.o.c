@@ -340,12 +340,14 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t* start, uint32_t* stop) {
 
 
 
-void log_br(long long int len, long long int loc){
+void log_br(long long int len, long long int loc, long long int srcLen, long long int originLen){
     char str[len + 1]; // +1 for the null terminator
     strncpy(str, (char*)__path_string_ptr, len);
     str[len] = '\0';  // ensure null termination
     printf("current loc %d\n", loc);
-    fprintf(stderr, "###$$$ len: %d\n", len);
+    fprintf(stderr, "###$$$ all len: %d\n", len);
+    fprintf(stderr, "###$$$ all srcLen: %d\n", srcLen);
+    fprintf(stderr, "###$$$ all originLen: %d\n", originLen);
     printf("###$$$ final path %s\n", str);
 }
 
