@@ -156,6 +156,21 @@ bool AFLCoverage::runOnModule(Module &M) {
     FunctionType *funcType = FunctionType::get(retType1, charPtrType, false);
     FunctionCallee strlen_wrapper = (&M)->getOrInsertFunction("strlen_wrapper", funcType);
 
+    // Return type is int32 (i.e., i32 in LLVM)
+    Type *retType = Type::getInt32Ty(C);
+
+// First argument type is char* (i.e., i8* in LLVM)
+    Type *charPtrType = Type::getInt8PtrTy(C);
+
+// The sprintf function has at least two char* arguments before the variadic part
+    std::vector<Type*> argTypes = {charPtrType, charPtrType};
+
+// Define the function type, with 'true' indicating it's variadic
+    FunctionType *funcType = FunctionType::get(retType, argTypes, true);
+
+// Declare or get the function from the module
+    FunctionCallee sprintf_wrapper = (&M)->getOrInsertFunction("sprintf_wrapper", funcType);
+
     /* Instrument all the things! */
 
     int inst_blocks = 0;

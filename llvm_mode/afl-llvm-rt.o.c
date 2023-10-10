@@ -29,6 +29,7 @@
 #include "../android-ashmem.h"
 #include "../config.h"
 #include "../types.h"
+#include <stdarg.h>
 
 #include <stdio.h>
 #include <stdlib.h>
