@@ -239,6 +239,8 @@ static s32 cpu_aff = -1;       	      /* Selected CPU core                */
 #endif /* HAVE_AFFINITY */
 
 static FILE* plot_file;               /* Gnuplot output file              */
+static FILE *path_file;              /* all path File             */
+
 
 struct queue_entry {
 
@@ -2482,42 +2484,11 @@ static u8 run_target(char** argv, u32 timeout) {
   MEM_BARRIER();
 
   tb4 = *(u32*)trace_bits;
-   // test
-    printf("trace_bits first length===============%d\n", trace_bits[1]);
-    printf("path===============%s\n", path_bits);
-    // path check
-    int strlength = trace_bits[1];
-    char str[strlength + 1]; // +1 for the null terminator
-    strncpy(str, (char*)path_bits, strlength);
-    str[strlength] = '\0';  // ensure null termination
-    printf("final path %s\n", str);
 
-    char* token = strtok(str, "-");
-    int numbers[100]; // 假设最多有100个数字（可根据实际情况调整大小）
-    int numCount = 0;
-    while(token != NULL) {
-        numbers[numCount++] = atoi(token);
-        token = strtok(NULL, "-");
-    }
-
-    // 打印数字数组  是否命中
-    for (int i = 0; i < numCount; ++i) {
-        printf("every num ====%d\n", numbers[i]);
-        // check
-        printf("trace bolck hit mean= ====%d\n", trace_bits[numbers[i]]);
-    }
-   int num1 = 0;
-    for(size_t i = 0; i < sizeof(trace_bits); ++i) {
-        if (trace_bits[i] ==1){
-            num1 ++;
-        }
-    }
-  printf("trace all count= ====%d\n", num1);
-
-
-
-
-
+printf("path===============%s\n", path_bits);
+//写入文件
+fprintf(path_file, "%s\n", path_bits);
+fflush(path_file);
 
 
 
@@ -7325,12 +7296,19 @@ EXP_ST void setup_dirs_fds(void) {
 
   plot_file = fdopen(fd, "w");
   if (!plot_file) PFATAL("fdopen() failed");
-
   fprintf(plot_file, "# unix_time, cycles_done, cur_path, paths_total, "
                      "pending_total, pending_favs, map_size, unique_crashes, "
                      "unique_hangs, max_depth, execs_per_sec\n");
                      /* ignore errors */
 
+  /*path output file*/
+  tmp = alloc_printf("%s/path_data", out_dir);
+  remove(tmp);
+  fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  if (fd <0) PFATAL("Unable to create '%s'", tmp);
+  ck_free(tmp);
+  path_file = fdopen(fd, "w");
+  if (!path_file) PFATAL("fdopen() failed");
 }
 
 
@@ -8243,6 +8221,7 @@ stop_fuzzing:
   }
 
   fclose(plot_file);
+  fclose(path_file);
   destroy_queue();
   destroy_extras();
   ck_free(target_path);
